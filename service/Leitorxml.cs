@@ -95,4 +95,5 @@ namespace SGC.service
 
             return logBuilder.ToString();
         }
-    
+        }
+}

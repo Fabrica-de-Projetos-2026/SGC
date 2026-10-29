@@ -9,6 +9,7 @@ using System.Xml.Linq;
 
 namespace SGC.service
 {
+
     public class NotaParaEnvio
     {
         public string chave { get; set; }
@@ -17,57 +18,93 @@ namespace SGC.service
 
     public class Leitorxml
     {
-        public static string lerxml(string competenciaFiltrar)
+
+        string pasta = @"C:\XmlNfce";
+        XNamespace ns = "http://www.portalfiscal.inf.br/nfe";
+        public string conversorDataParaXml(string dataPadraoNacional)
         {
-            StringBuilder logBuilder = new StringBuilder();
-            string pasta = @"C:\XmlNfce";
+            string[] partesData = dataPadraoNacional.Split('/');
+
+            if (partesData.Length != 2)
+            {
+                throw new Exception("Formato de data inválido.");
+            }
+
+            //fiz dessa forma para não alocar memoria desnecessariamente com mais variaveis
+            // partesData[1] é o ano
+            //e partesData[0] é o mes
+            return $"{partesData[1]}-{partesData[0]}";
+        }
+
+        public XElement coletarTagXml(string arquivo, string tag)
+        {
+            XNamespace ns = "http://www.portalfiscal.inf.br/nfe";
+            XDocument xml = XDocument.Load(arquivo);
+
+            XElement infNFe = xml.Descendants(ns + "infNFe").FirstOrDefault();
+
+            XElement valorTag = infNFe.Descendants(ns + $"{tag}").FirstOrDefault();
+
+            return valorTag;
+        }
+        public string coletarChaveNfe(string arquivo)
+        {
+
+            XDocument xml = XDocument.Load(arquivo);
+
+            XElement infNFe = xml.Descendants(ns + "infNFe").FirstOrDefault();
+            string chave = ((string)infNFe.Attribute("Id")).Replace("NFe", "");
+
+            return chave;
+
+        }
+
+        public string ProcessarNf(string competenciaFiltrar)
+        {
 
             if (!Directory.Exists(pasta))
             {
                 throw new Exception($"A pasta não foi encontrada: {pasta}.");
             }
 
-            // Converte a Competência do padrão nacional (MM/AAAA) para o formato das tags XML (AAAA-MM)
-            string[] partesData = competenciaFiltrar.Split('/');
-            if (partesData.Length != 2) throw new Exception("Formato de data inválido.");
-            string mes = partesData[0];
-            string ano = partesData[1];
-            string competenciaXmlFiltro = $"{ano}-{mes}";
+            string competenciaXmlFiltro = conversorDataParaXml(competenciaFiltrar);
 
             string[] arquivos = Directory.GetFiles(pasta, "*.xml");
-            logBuilder.AppendLine("[SUCESSO] Diretório encontrado!");
-            logBuilder.AppendLine($"[INFO] Total de ficheiros XML encontrados: {arquivos.Length}");
 
             List<NotaParaEnvio> notasValidadas = new List<NotaParaEnvio>();
-            XNamespace ns = "http://www.portalfiscal.inf.br/nfe";
+
             string cnpjParaArquivo = "";
 
             foreach (string arquivo in arquivos)
             {
                 try
                 {
-                    //  carrega o XML fisicamente sem usar a Chave de Acesso do título
-                    XDocument xml = XDocument.Load(arquivo);
-                    logBuilder.AppendLine($"[INFO] Lendo arquivo: {Path.GetFileName(arquivo)}");
 
-                    XElement infNFe = xml.Descendants(ns + "infNFe").FirstOrDefault();
-                    if (infNFe == null) continue;
+                    string chave = coletarChaveNfe(arquivo);
 
-                    string modelo = infNFe.Descendants(ns + "mod").FirstOrDefault()?.Value;
-                    if (modelo != "65") continue;
+                    string modelo = chave.Substring(20, 2);
 
-                    string dhEmi = infNFe.Descendants(ns + "dhEmi").FirstOrDefault()?.Value;
-                    string competenciaXml = string.IsNullOrEmpty(dhEmi) ? "" : dhEmi.Substring(0, 7);
-                    if (competenciaXml != competenciaXmlFiltro) continue;
+                    if (modelo != "65")
+                    {
+                        continue;
+                    }
 
-                    XElement dest = infNFe.Descendants(ns + "dest").FirstOrDefault();
+                    string competenciaXml = $"20{chave.Substring(2, 2)}-{chave.Substring(4, 2)}";
+
+                    if (competenciaXml != competenciaXmlFiltro)
+                    {
+                        continue;
+                    }
+
+                    XElement dest = coletarTagXml(arquivo, "dest");
+
                     bool temCpf = dest?.Element(ns + "CPF") != null;
                     bool temCnpj = dest?.Element(ns + "CNPJ") != null;
-                    if (temCpf || temCnpj) continue;
 
-                    string chave = infNFe.Attribute("Id")?.Value.Replace("NFe", "");
-                    string valorString = infNFe.Descendants(ns + "vNF").FirstOrDefault()?.Value;
-                    decimal valorConvertido = valorString != null ? decimal.Parse(valorString, CultureInfo.InvariantCulture) : 0;
+                    if (temCpf || temCnpj)
+                    {
+                        continue;
+                    }
 
                     notasValidadas.Add(new NotaParaEnvio
                     {
@@ -75,41 +112,38 @@ namespace SGC.service
                         competencia = competenciaXml
                     });
 
-                    // Captura o CNPJ dentro do XML (tag <emit>) para dar nome ao ficheiro final
                     if (string.IsNullOrEmpty(cnpjParaArquivo))
                     {
-                        XElement emit = infNFe.Descendants(ns + "emit").FirstOrDefault();
-                        cnpjParaArquivo = emit?.Element(ns + "CNPJ")?.Value ?? "00000";
-                    }
+                        XElement emit = coletarTagXml(arquivo, "emit");
+                        string cnpj = emit?.Element(ns + "CNPJ")?.Value ?? "00000";
 
-                    logBuilder.AppendLine($"[APROVADA] Arquivo atende aos requisitos: {Path.GetFileName(arquivo)}");
+                        cnpjParaArquivo = cnpj.Length >= 5 ? cnpj.Substring(0, 5) : cnpj.PadRight(5, '0');
+                    }
                 }
                 catch (Exception ex)
                 {
-                    logBuilder.AppendLine($"[AVISO] Erro ao analisar {Path.GetFileName(arquivo)}: {ex.Message}");
+                    throw new Exception("Erro ao tentar abrir o XML {0}", ex);
                 }
             }
 
             if (notasValidadas.Count > 0)
             {
-                var opcoesJson = new JsonSerializerOptions { WriteIndented = true };
-                string jsonString = JsonSerializer.Serialize(notasValidadas, opcoesJson);
+                var opcoesJson = new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                };
 
-                // Garante que o CNPJ tem tamanho suficiente para evitar erros
-                string xxxxx = cnpjParaArquivo.Length >= 5 ? cnpjParaArquivo.Substring(0, 5) : cnpjParaArquivo.PadRight(5, '0');
-                string nomeArquivoFinal = $"{mes}{ano}{xxxxx}.txt";
+                string jsonString = JsonSerializer.Serialize(notasValidadas, opcoesJson);
+                string nomeArquivoFinal = $"{competenciaXmlFiltro.Replace("-", "")}{cnpjParaArquivo}.txt";
                 string caminhoCompletoSaida = Path.Combine(pasta, nomeArquivoFinal);
 
                 File.WriteAllText(caminhoCompletoSaida, jsonString);
-                logBuilder.AppendLine($"\n[SUCESSO] {notasValidadas.Count} notas passaram nos filtros.");
-                logBuilder.AppendLine($"[SUCESSO] Arquivo '{nomeArquivoFinal}' gerado com a lista das notas.");
             }
             else
             {
-                logBuilder.AppendLine("\n[AVISO] Nenhuma nota fiscal atendeu aos filtros estabelecidos.");
+                Console.Write("\n[AVISO] Nenhuma nota fiscal atendeu aos filtros estabelecidos.");
             }
-
-            return logBuilder.ToString();
+            return "sucesso";
         }
     }
 }

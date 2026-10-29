@@ -1,5 +1,6 @@
 using SGC.service;
 using System;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace SGC
@@ -10,17 +11,16 @@ namespace SGC
         public Form1()
         {
             InitializeComponent();
-            
+
         }
 
         private void btnProcessar_Click(object sender, EventArgs e)
         {
             string competencia = txtCompetencia.Text.Trim();
 
-            // Validação simples para garantir que a pessoa digitou algo no padrão MM/AAAA
-            if (string.IsNullOrEmpty(competencia) || competencia.Length < 7 || !competencia.Contains("/"))
+            if (!Regex.IsMatch(competencia, @"^(0[1-9]|1[0-2])/\d{4}$"))
             {
-                MessageBox.Show("Por favor, preencha a Competência no formato MM/AAAA (ex: 01/2026).", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Por favor, preencha a Competência no formato correto (ex: 01/2026).", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -53,6 +53,16 @@ namespace SGC
         }
 
         private void label2_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void pictureBox1_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void Form1_Load_1(object sender, EventArgs e)
         {
 
         }

@@ -18,28 +18,36 @@ namespace SGC.service
 
     public class Leitorxml
     {
-        public static string lerxml(string serieFiltrar, string competenciaFiltrar)
+        public static string lerxml(string competenciaFiltrar)
         {
             StringBuilder logBuilder = new StringBuilder();
             string pasta = @"C:\XmlNfce";
-            string arquivoJson = @"C:\XmlNfce\envio.json";
 
             if (!Directory.Exists(pasta))
             {
                 throw new Exception($"A pasta não foi encontrada: {pasta}.");
             }
 
+            // Converte a Competência do padrão nacional (MM/AAAA) para o formato das tags XML (AAAA-MM)
+            string[] partesData = competenciaFiltrar.Split('/');
+            if (partesData.Length != 2) throw new Exception("Formato de data inválido.");
+            string mes = partesData[0];
+            string ano = partesData[1];
+            string competenciaXmlFiltro = $"{ano}-{mes}";
+
             string[] arquivos = Directory.GetFiles(pasta, "*.xml");
             logBuilder.AppendLine("[SUCESSO] Diretório encontrado!");
-            logBuilder.AppendLine($"[INFO] Total de arquivos XML encontrados: {arquivos.Length}");
+            logBuilder.AppendLine($"[INFO] Total de ficheiros XML encontrados: {arquivos.Length}");
 
             List<NotaParaEnvio> notasValidadas = new List<NotaParaEnvio>();
             XNamespace ns = "http://www.portalfiscal.inf.br/nfe";
+            string cnpjParaArquivo = "";
 
             foreach (string arquivo in arquivos)
             {
                 try
                 {
+                    //  carrega o XML fisicamente sem usar a Chave de Acesso do título
                     XDocument xml = XDocument.Load(arquivo);
                     logBuilder.AppendLine($"[INFO] Lendo arquivo: {Path.GetFileName(arquivo)}");
 
@@ -49,12 +57,9 @@ namespace SGC.service
                     string modelo = infNFe.Descendants(ns + "mod").FirstOrDefault()?.Value;
                     if (modelo != "65") continue;
 
-                    string serieXml = infNFe.Descendants(ns + "serie").FirstOrDefault()?.Value;
-                    if (serieXml != serieFiltrar) continue;
-
                     string dhEmi = infNFe.Descendants(ns + "dhEmi").FirstOrDefault()?.Value;
                     string competenciaXml = string.IsNullOrEmpty(dhEmi) ? "" : dhEmi.Substring(0, 7);
-                    if (competenciaXml != competenciaFiltrar) continue;
+                    if (competenciaXml != competenciaXmlFiltro) continue;
 
                     XElement dest = infNFe.Descendants(ns + "dest").FirstOrDefault();
                     bool temCpf = dest?.Element(ns + "CPF") != null;
@@ -63,7 +68,7 @@ namespace SGC.service
 
                     string chave = infNFe.Attribute("Id")?.Value.Replace("NFe", "");
                     string valorString = infNFe.Descendants(ns + "vNF").FirstOrDefault()?.Value;
-                    decimal valorConvertido = decimal.Parse(valorString, CultureInfo.InvariantCulture);
+                    decimal valorConvertido = valorString != null ? decimal.Parse(valorString, CultureInfo.InvariantCulture) : 0;
 
                     notasValidadas.Add(new NotaParaEnvio
                     {
@@ -71,6 +76,13 @@ namespace SGC.service
                         competencia = competenciaXml,
                         valor = valorConvertido
                     });
+
+                    // Captura o CNPJ dentro do XML (tag <emit>) para dar nome ao ficheiro final
+                    if (string.IsNullOrEmpty(cnpjParaArquivo))
+                    {
+                        XElement emit = infNFe.Descendants(ns + "emit").FirstOrDefault();
+                        cnpjParaArquivo = emit?.Element(ns + "CNPJ")?.Value ?? "00000";
+                    }
 
                     logBuilder.AppendLine($"[APROVADA] Arquivo atende aos requisitos: {Path.GetFileName(arquivo)}");
                 }
@@ -84,15 +96,22 @@ namespace SGC.service
             {
                 var opcoesJson = new JsonSerializerOptions { WriteIndented = true };
                 string jsonString = JsonSerializer.Serialize(notasValidadas, opcoesJson);
-                File.WriteAllText(arquivoJson, jsonString);
+
+                // Garante que o CNPJ tem tamanho suficiente para evitar erros
+                string xxxxx = cnpjParaArquivo.Length >= 5 ? cnpjParaArquivo.Substring(0, 5) : cnpjParaArquivo.PadRight(5, '0');
+                string nomeArquivoFinal = $"{mes}{ano}{xxxxx}.txt";
+                string caminhoCompletoSaida = Path.Combine(pasta, nomeArquivoFinal);
+
+                File.WriteAllText(caminhoCompletoSaida, jsonString);
                 logBuilder.AppendLine($"\n[SUCESSO] {notasValidadas.Count} notas passaram nos filtros.");
-                logBuilder.AppendLine($"[SUCESSO] Arquivo '{arquivoJson}' gerado com a lista das notas.");
+                logBuilder.AppendLine($"[SUCESSO] Arquivo '{nomeArquivoFinal}' gerado com a lista das notas.");
             }
             else
             {
-                logBuilder.AppendLine("\n[AVISO] Nenhuma nota fiscal atendeu aos 4 filtros estabelecidos.");
+                logBuilder.AppendLine("\n[AVISO] Nenhuma nota fiscal atendeu aos filtros estabelecidos.");
             }
 
             return logBuilder.ToString();
         }
-    
+    }
+}

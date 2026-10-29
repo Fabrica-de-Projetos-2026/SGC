@@ -13,7 +13,6 @@ namespace SGC.service
     {
         public string chave { get; set; }
         public string competencia { get; set; }
-        public decimal valor { get; set; }
     }
 
     public class Leitorxml
@@ -73,8 +72,7 @@ namespace SGC.service
                     notasValidadas.Add(new NotaParaEnvio
                     {
                         chave = chave,
-                        competencia = competenciaXml,
-                        valor = valorConvertido
+                        competencia = competenciaXml
                     });
 
                     // Captura o CNPJ dentro do XML (tag <emit>) para dar nome ao ficheiro final

@@ -49,11 +49,11 @@ namespace SGC.service
         }
         public string coletarChaveNfe(string arquivo)
         {
-            
+
             XDocument xml = XDocument.Load(arquivo);
 
             XElement infNFe = xml.Descendants(ns + "infNFe").FirstOrDefault();
-            string chave = (string)infNFe.Attribute("Id");
+            string chave = ((string)infNFe.Attribute("Id")).Replace("NFe", "");
 
             return chave;
 
@@ -61,7 +61,7 @@ namespace SGC.service
 
         public string ProcessarNf(string competenciaFiltrar)
         {
-           
+
             if (!Directory.Exists(pasta))
             {
                 throw new Exception($"A pasta não foi encontrada: {pasta}.");
@@ -72,28 +72,39 @@ namespace SGC.service
             string[] arquivos = Directory.GetFiles(pasta, "*.xml");
 
             List<NotaParaEnvio> notasValidadas = new List<NotaParaEnvio>();
-      
+
             string cnpjParaArquivo = "";
 
             foreach (string arquivo in arquivos)
             {
                 try
                 {
-                   
+
                     string chave = coletarChaveNfe(arquivo);
 
-                    string modelo = chave.Substring(21, 22);
-                    if (modelo != "65") continue;
+                    string modelo = chave.Substring(20, 2);
 
+                    if (modelo != "65")
+                    {
+                        continue;
+                    }
 
-                    string competenciaXml = $"{chave.Substring(4, 2)}/20{chave.Substring(2, 2)}";
-                    if (competenciaXml != competenciaXmlFiltro) continue;
+                    string competenciaXml = $"20{chave.Substring(2, 2)}-{chave.Substring(4, 2)}";
+
+                    if (competenciaXml != competenciaXmlFiltro)
+                    {
+                        continue;
+                    }
 
                     XElement dest = coletarTagXml(arquivo, "dest");
-                     
+
                     bool temCpf = dest?.Element(ns + "CPF") != null;
                     bool temCnpj = dest?.Element(ns + "CNPJ") != null;
-                    if (temCpf || temCnpj) continue;
+
+                    if (temCpf || temCnpj)
+                    {
+                        continue;
+                    }
 
                     notasValidadas.Add(new NotaParaEnvio
                     {
@@ -101,11 +112,12 @@ namespace SGC.service
                         competencia = competenciaXml
                     });
 
-                    // 
                     if (string.IsNullOrEmpty(cnpjParaArquivo))
                     {
-                        XElement emit = coletarTagXml(arquivo,"emit");
-                        cnpjParaArquivo = (emit?.Element(ns + "CNPJ")?.Value ?? "00000").Substring(0, 5);
+                        XElement emit = coletarTagXml(arquivo, "emit");
+                        string cnpj = emit?.Element(ns + "CNPJ")?.Value ?? "00000";
+
+                        cnpjParaArquivo = cnpj.Length >= 5 ? cnpj.Substring(0, 5) : cnpj.PadRight(5, '0');
                     }
                 }
                 catch (Exception ex)
@@ -116,10 +128,13 @@ namespace SGC.service
 
             if (notasValidadas.Count > 0)
             {
-                var opcoesJson = new JsonSerializerOptions { WriteIndented = true };
-                string jsonString = JsonSerializer.Serialize(notasValidadas, opcoesJson);
+                var opcoesJson = new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                };
 
-                string nomeArquivoFinal = $"{competenciaXmlFiltro}{cnpjParaArquivo}.txt";
+                string jsonString = JsonSerializer.Serialize(notasValidadas, opcoesJson);
+                string nomeArquivoFinal = $"{competenciaXmlFiltro.Replace("-", "")}{cnpjParaArquivo}.txt";
                 string caminhoCompletoSaida = Path.Combine(pasta, nomeArquivoFinal);
 
                 File.WriteAllText(caminhoCompletoSaida, jsonString);

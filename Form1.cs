@@ -6,9 +6,11 @@ namespace SGC
 {
     public partial class Form1 : Form
     {
+        Leitorxml leitorxml = new Leitorxml();
         public Form1()
         {
             InitializeComponent();
+            
         }
 
         private void btnProcessar_Click(object sender, EventArgs e)
@@ -22,13 +24,9 @@ namespace SGC
                 return;
             }
 
-            rtbLog.Clear();
-            rtbLog.AppendText("[INFO] Iniciando processamento...\n");
-            rtbLog.AppendText($"[INFO] Filtros aplicados - Competência: {competencia}\n\n");
-
             try
             {
-                string logDoBackEnd = Leitorxml.lerxml(competencia);
+                string logDoBackEnd = leitorxml.ProcessarNf(competencia);
                 rtbLog.AppendText(logDoBackEnd);
                 rtbLog.AppendText("\n[SUCESSO] Processamento finalizado!\n");
             }

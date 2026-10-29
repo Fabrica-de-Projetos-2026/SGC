@@ -13,12 +13,11 @@ namespace SGC.service
     {
         public string chave { get; set; }
         public string competencia { get; set; }
-        public decimal valor { get; set; }
     }
 
     public class Leitorxml
     {
-        public static string lerxml(string serieFiltrar, string competenciaFiltrar)
+        public static string lerxml( string competenciaFiltrar)
         {
             StringBuilder logBuilder = new StringBuilder();
             string pasta = @"C:\XmlNfce";
@@ -49,8 +48,6 @@ namespace SGC.service
                     string modelo = infNFe.Descendants(ns + "mod").FirstOrDefault()?.Value;
                     if (modelo != "65") continue;
 
-                    string serieXml = infNFe.Descendants(ns + "serie").FirstOrDefault()?.Value;
-                    if (serieXml != serieFiltrar) continue;
 
                     string dhEmi = infNFe.Descendants(ns + "dhEmi").FirstOrDefault()?.Value;
                     string competenciaXml = string.IsNullOrEmpty(dhEmi) ? "" : dhEmi.Substring(0, 7);
@@ -68,8 +65,7 @@ namespace SGC.service
                     notasValidadas.Add(new NotaParaEnvio
                     {
                         chave = chave,
-                        competencia = competenciaXml,
-                        valor = valorConvertido
+                        competencia = competenciaXml
                     });
 
                     logBuilder.AppendLine($"[APROVADA] Arquivo atende aos requisitos: {Path.GetFileName(arquivo)}");

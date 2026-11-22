@@ -1,12 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Text.Json.Serialization;
 
 namespace SGC.models
 {
     internal class NotaFiscal
     {
-        public int chaveAcesso { get; set; }
-        public DateTime competencia { get; set; }
+        public string ChaveAcesso { get; set; }
+
+        public DateTime Competencia { get; set; }
     }
 }

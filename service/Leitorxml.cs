@@ -6,16 +6,10 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using SGC.models;
 
 namespace SGC.service
 {
-
-    public class NotaParaEnvio
-    {
-        public string chave { get; set; }
-        public string competencia { get; set; }
-    }
-
     public class Leitorxml
     {
 
@@ -71,7 +65,7 @@ namespace SGC.service
 
             string[] arquivos = Directory.GetFiles(pasta, "*.xml");
 
-            List<NotaParaEnvio> notasValidadas = new List<NotaParaEnvio>();
+            List<NotaFiscal> notasValidadas = new List<NotaFiscal>();
 
             string cnpjParaArquivo = "";
 
@@ -106,10 +100,10 @@ namespace SGC.service
                         continue;
                     }
 
-                    notasValidadas.Add(new NotaParaEnvio
+                    notasValidadas.Add(new NotaFiscal
                     {
-                        chave = chave,
-                        competencia = competenciaXml
+                        ChaveAcesso = chave,
+                        Competencia = competenciaXml
                     });
 
                     if (string.IsNullOrEmpty(cnpjParaArquivo))

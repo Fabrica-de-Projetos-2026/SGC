@@ -7,7 +7,7 @@ namespace SGC
 {
     public partial class Form1 : Form
     {
-        Leitorxml leitorxml = new Leitorxml();
+        ProcessadorNfce processadorNfce = new ProcessadorNfce();
         public Form1()
         {
             InitializeComponent();
@@ -26,9 +26,8 @@ namespace SGC
 
             try
             {
-                string logDoBackEnd = leitorxml.ProcessarNf(competencia);
+                string logDoBackEnd = processadorNfce.ProcessarNf(competencia);
                 rtbLog.AppendText(logDoBackEnd);
-                rtbLog.AppendText("\n[SUCESSO] Processamento finalizado!\n");
             }
             catch (Exception ex)
             {

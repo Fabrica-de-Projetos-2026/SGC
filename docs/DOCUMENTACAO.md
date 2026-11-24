@@ -1,77 +1,55 @@
 # SGC — Processador de NFC-e
 
-Fábrica de Projetos · 4º Termo ADS · UNIMAR
+Fábrica de Projetos · 4º Termo ADS · UNIMAR · Empresa Parceira: Scaquete Sistemas
 
 ## O que faz
 
-Lê os XMLs de notas fiscais em `C:\XmlNfce`, seleciona só as NFC-e (modelo 65) emitidas para
-consumidor final **sem CPF/CNPJ** e gera o arquivo `envio.json`.
+Lê os arquivos `.xml` de notas fiscais em `C:\XmlNfce`, filtra de forma otimizada apenas as **NFC-e (modelo 65)** da competência informada, **autorizadas pela SEFAZ (`cStat = 100`)** e emitidas para consumidor final **sem CPF/CNPJ**, gerando o arquivo JSON sequencial com nomenclatura padronizada `mmaaaaxxxxx.txt`.
 
-O usuário informa a **série** (ex.: `1`) e a **competência** no formato `AAAA-MM` (ex.: `2026-01`).
+O usuário informa a **competência** no padrão nacional `MM/AAAA` (ex.: `01/2026`).
 
 ## Arquitetura
 
-C# com .NET 10 e Windows Forms.
+C# com .NET 10 e Windows Forms, dividido em camadas (`UI`, `models` e `service`).
 
-| Arquivo | Função |
-|---|---|
-| `Form1.cs` | Tela: recebe série e competência, chama o leitor e mostra o log. |
-| `service/Leitorxml.cs` | Lê os XMLs, aplica os filtros e grava o `envio.json`. |
-
-```
-Form1 ──(série, competência)──► Leitorxml ──lê──► C:\XmlNfce\*.xml
-  ▲                                 │
-  └────────────(log)────────────────┴──grava──► C:\XmlNfce\envio.json
-```
-
-## Como funciona
-
-Para cada `.xml` da pasta, o leitor aplica quatro filtros. A nota só é aprovada se passar em todos.
-
-| Filtro | Regra | Tag |
+| Arquivo | Camada | Função |
 |---|---|---|
-| Modelo | Deve ser `65` (NFC-e), não `55` (NF-e) | `<mod>` |
-| Série | Igual à informada | `<serie>` |
-| Competência | `AAAA-MM` da data de emissão igual ao informado | `<dhEmi>` |
-| Consumidor final | Sem `<CPF>` nem `<CNPJ>` | `<dest>` |
+| `Form1.cs` | UI (Front-end) | Recebe e valida a competência (`MM/AAAA`), aciona o `ProcessadorNfce` e exibe o log em tela. |
+| `models/ChaveNfce.cs` | Model | Mapeia os 44 dígitos da chave de acesso em seus blocos fiscais (`Uf`, `AnoMes`, `Cnpj`, `Modelo`, `Serie`, `NumeroNf`, `TipoEmissao`, `CodigoNumerico`, `DigitoVerificador`, `Competencia`). |
+| `models/NotaJson.cs` | Model | Estrutura de saída serializada no JSON final (`ChaveAcesso`, `Modelo`, `Competencia`). |
+| `service/ProcessadorNfce.cs` | Service | Orquestra validação de diretório, pré-filtro pela chave, leitura condicional do XML e geração do arquivo. |
+| `service/Tratamento.cs` | Service | Valida a competência (`MM/AAAA`), valida os 44 dígitos da chave e decompõe a chave em `ChaveNfce`. |
+| `service/LeitorXmlNfce.cs` | Service | Abre o XML sob demanda e localiza tags no namespace NFe (`cStat`, `dest`, `infNFe`). |
+| `service/GeradorJson.cs` | Service | Serializa a lista validada em JSON indentado e salva `mmaaaaxxxxx.txt`. |
 
-Se um XML estiver corrompido, o erro vai para o log como aviso e a leitura continua.
+## Pipeline de Filtros e Performance
 
-## Saída — `envio.json`
+1. **Validação de Diretório:** verifica se `C:\XmlNfce` existe antes de iniciar (`DirectoryNotFoundException`).
+2. **Pré-filtro pela Chave no Nome do Arquivo (0 leituras de disco nas descartadas):**
+   - Extrai a chave de 44 dígitos do nome do arquivo (com fallback automático para o atributo `Id` de `<infNFe>` caso o arquivo esteja renomeado).
+   - Rejeita imediatamente notas com `Modelo != "65"` (ex.: descarta NF-e `55`).
+   - Rejeita imediatamente notas com `Competencia != MM/AAAA`.
+3. **Leitura Condicional do XML (1 única abertura em memória por candidata):**
+   - **Autorização SEFAZ:** localiza `<cStat>` e exige valor `"100"`.
+   - **Consumidor não identificado:** localiza `<dest>` e descarta se existir `<CPF>` ou `<CNPJ>` preenchido.
+
+Arquivos corrompidos ou inválidos são registrados como aviso no log sem interromper o processamento do lote.
+
+## Saída — `mmaaaaxxxxx.txt`
+
+Exemplo para competência `01/2026` e emitente `44470771000118` → arquivo `01202644470.txt`:
 
 ```json
 [
   {
-    "chave": "35260144470771000118650010000009121060719696",
-    "competencia": "2026-01",
-    "valor": 75.00
+    "ChaveAcesso": "35260144470771000118650010000009121060719696",
+    "Modelo": "65",
+    "Competencia": "01/2026"
+  },
+  {
+    "ChaveAcesso": "35260144470771000118650010000009371060719695",
+    "Modelo": "65",
+    "Competencia": "01/2026"
   }
 ]
 ```
-
-| Campo | Origem |
-|---|---|
-| `chave` | Atributo `Id` de `<infNFe>`, sem o prefixo `NFe` |
-| `competencia` | `AAAA-MM` de `<dhEmi>` |
-| `valor` | `<vNF>` como número decimal |
-
-## Casos de teste
-
-Parâmetros: série `1`, competência `2026-01`.
-
-**XML válido** — `...650010000009121060719696-nfe.xml`
-Modelo 65, série 1, emitido em 03/01/2026 e sem `<dest>`.
-Passa em todos os filtros e entra no `envio.json` com valor `75.00`.
-
-**XML inválido** — `...650010000009211060719695-nfe.xml`
-Modelo 65, série 1, emitido em 05/01/2026, mas com `<CPF>` em `<dest>`.
-Descartado porque o comprador está identificado.
-
-Resultado do conjunto de exemplo: 6 lidos, 2 aprovados, 4 descartados.
-
-## Como executar
-
-1. Coloque os XMLs em `C:\XmlNfce`.
-2. Abra `SGC.slnx` no Visual Studio e execute (F5).
-3. Informe série e competência e clique em processar.
-4. Confira o log e o arquivo `C:\XmlNfce\envio.json`.

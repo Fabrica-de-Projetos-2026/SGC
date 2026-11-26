@@ -16,8 +16,8 @@ namespace SGC.service
 
             string jsonString = JsonSerializer.Serialize(notasValidadas, opcoesJson);
 
-            //  mmaaaaxxxxx.txt
-            string nomeArquivoFinal = $"{competenciaPadraoNacional.Replace("/", "")}{cnpjParaArquivo}.txt";
+            //  mmaaaaxxxxx.json
+            string nomeArquivoFinal = $"{competenciaPadraoNacional.Replace("/", "")}{cnpjParaArquivo}.json";
             string caminhoCompletoSaida = Path.Combine(pasta, nomeArquivoFinal);
 
             File.WriteAllText(caminhoCompletoSaida, jsonString);

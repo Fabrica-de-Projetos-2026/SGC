@@ -10,7 +10,6 @@ namespace SGC.service
     public class ProcessadorNfce
     {
         private readonly string pasta;
-        private readonly XNamespace ns = "http://www.portalfiscal.inf.br/nfe";
 
         private readonly LeitorXmlNfce leitorXml = new LeitorXmlNfce();
         private readonly Tratamento tratamento = new Tratamento();
@@ -21,13 +20,6 @@ namespace SGC.service
             this.pasta = pasta;
         }
 
-        public string lerNomeArquivo(string arquivo)
-        {
-            string nome = Path.GetFileNameWithoutExtension(arquivo);
-            string chave = nome.Split('-')[0].Replace("NFe", "");
-            return chave;
-        }
-
         public string ProcessarNf(string competenciaFiltrar)
         {
             if (!Directory.Exists(pasta))
@@ -35,9 +27,9 @@ namespace SGC.service
                 throw new DirectoryNotFoundException($"A pasta não foi encontrada: {pasta}.");
             }
 
-            string competenciaFiltro = tratamento.validarCompetencia(competenciaFiltrar);
-
             string[] arquivos = Directory.GetFiles(pasta, "*.xml");
+
+            string competenciaFiltro = tratamento.validarCompetencia(competenciaFiltrar);
 
             List<NotaJson> notasValidadas = new List<NotaJson>();
             StringBuilder log = new StringBuilder();
@@ -48,7 +40,7 @@ namespace SGC.service
             {
                 try
                 {
-                    string chave = lerNomeArquivo(arquivo);
+                    string chave = tratamento.extrairChave(arquivo);
                     XDocument xml = null;
 
                     // Se o nome do arquivo não trouxer a chave de 44 dígitos, busca no atributo Id do XML
@@ -66,43 +58,14 @@ namespace SGC.service
 
                     ChaveNfce chaveNfce = tratamento.montarChaveNfce(chave);
 
-                    // Filtro inicial pela chave
-                    if (chaveNfce.Modelo != "65")
-                    {
-                        continue;
-                    }
-
-                    if (chaveNfce.Competencia != competenciaFiltro)
-                    {
-                        continue;
-                    }
-
                     if (xml == null)
                     {
                         xml = leitorXml.abrirXml(arquivo);
                     }
 
-                    // validar cStat = 100
-                    XElement cStat = leitorXml.coletarTagXml(xml, "cStat");
-                    if (cStat == null || cStat.Value != "100")
+                    if (!tratamento.validarNF(chaveNfce, xml, competenciaFiltro))
                     {
                         continue;
-                    }
-
-                    // Rejeitar notas com consumidor identificado CPF ou CNPJ em <dest>
-                    XElement dest = leitorXml.coletarTagXml(xml, "dest");
-                    if (dest != null)
-                    {
-                        XElement cpf = dest.Element(ns + "CPF");
-                        XElement cnpj = dest.Element(ns + "CNPJ");
-
-                        bool temCpf = cpf != null && !string.IsNullOrWhiteSpace(cpf.Value);
-                        bool temCnpj = cnpj != null && !string.IsNullOrWhiteSpace(cnpj.Value);
-
-                        if (temCpf || temCnpj)
-                        {
-                            continue;
-                        }
                     }
 
                     notasValidadas.Add(new NotaJson
@@ -119,11 +82,11 @@ namespace SGC.service
                 }
                 catch (Exception ex)
                 {
-                    log.AppendLine($"[AVISO] Arquivo ignorado por erro ao ler XML ({Path.GetFileName(arquivo)}): {ex.Message}");
+                    log.AppendLine($"Arquivo ignorado por erro ao ler XML ({Path.GetFileName(arquivo)}): {ex.Message}");
                 }
             }
 
-            log.AppendLine($"\n[INFO] {arquivos.Length} XML(s) lido(s), {notasValidadas.Count} aprovado(s).");
+            log.AppendLine($"{arquivos.Length} XMLs lidos, {notasValidadas.Count} aprovados");
 
             if (notasValidadas.Count > 0)
             {
@@ -132,7 +95,7 @@ namespace SGC.service
             }
             else
             {
-                log.AppendLine("Nenhuma nota fiscal atendeu aos filtros estabelecidos.");
+                log.AppendLine("Nenhuma nota fiscal atendeu aos filtros");
             }
 
             return log.ToString();

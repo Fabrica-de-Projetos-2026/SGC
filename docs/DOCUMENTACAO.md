@@ -4,7 +4,7 @@ Fábrica de Projetos · 4º Termo ADS · UNIMAR · Empresa Parceira: Scaquete Si
 
 ## O que faz
 
-Lê os arquivos `.xml` de notas fiscais em `C:\XmlNfce`, filtra de forma otimizada apenas as **NFC-e (modelo 65)** da competência informada, **autorizadas pela SEFAZ (`cStat = 100`)** e emitidas para consumidor final **sem CPF/CNPJ**, gerando o arquivo JSON sequencial com nomenclatura padronizada `mmaaaaxxxxx.txt`.
+Lê os arquivos `.xml` de notas fiscais em `C:\XmlNfce`, filtra de forma otimizada apenas as **NFC-e (modelo 65)** da competência informada, **autorizadas pela SEFAZ (`cStat = 100`)** e emitidas para consumidor final **sem CPF/CNPJ**, gerando o arquivo JSON sequencial com nomenclatura padronizada `mmaaaaxxxxx.json`.
 
 O usuário informa a **competência** no padrão nacional `MM/AAAA` (ex.: `01/2026`).
 
@@ -20,7 +20,7 @@ C# com .NET 10 e Windows Forms, dividido em camadas (`UI`, `models` e `service`)
 | `service/ProcessadorNfce.cs` | Service | Orquestra validação de diretório, pré-filtro pela chave, leitura condicional do XML e geração do arquivo. |
 | `service/Tratamento.cs` | Service | Valida a competência (`MM/AAAA`), valida os 44 dígitos da chave e decompõe a chave em `ChaveNfce`. |
 | `service/LeitorXmlNfce.cs` | Service | Abre o XML sob demanda e localiza tags no namespace NFe (`cStat`, `dest`, `infNFe`). |
-| `service/GeradorJson.cs` | Service | Serializa a lista validada em JSON indentado e salva `mmaaaaxxxxx.txt`. |
+| `service/GeradorJson.cs` | Service | Serializa a lista validada em JSON indentado e salva `mmaaaaxxxxx.json`. |
 
 ## Pipeline de Filtros e Performance
 
@@ -35,9 +35,9 @@ C# com .NET 10 e Windows Forms, dividido em camadas (`UI`, `models` e `service`)
 
 Arquivos corrompidos ou inválidos são registrados como aviso no log sem interromper o processamento do lote.
 
-## Saída — `mmaaaaxxxxx.txt`
+## Saída — `mmaaaaxxxxx.json`
 
-Exemplo para competência `01/2026` e emitente `44470771000118` → arquivo `01202644470.txt`:
+Exemplo para competência `01/2026` e emitente `44470771000118` → arquivo `01202644470.json`:
 
 ```json
 [
